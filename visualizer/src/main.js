@@ -51,6 +51,88 @@ function fiatShamirHash(label, val1, val2, val3) {
   return hash === 0n ? 1n : hash;
 }
 
+/* ============================================================
+   Motion helpers — small, reusable pieces of polish that never
+   touch the HTML file; everything below is created/attached at
+   runtime so the original markup stays exactly as authored.
+   ============================================================ */
+
+// Respect prefers-reduced-motion for the JS-driven animations too
+const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Ripple + brief "computing" state on every .btn, so actions feel
+// deliberate rather than instantaneous. `work` is the actual handler;
+// it runs after a short, tactile delay.
+function withButtonFeedback(button, work, delay = 260) {
+  return function (...args) {
+    if (!button || button.disabled) return work.apply(this, args);
+
+    if (button.dataset.rippleBound !== 'true') {
+      button.dataset.rippleBound = 'true';
+      button.addEventListener('pointerdown', (e) => spawnRipple(button, e));
+    }
+
+    if (REDUCE_MOTION) {
+      work.apply(this, args);
+      return;
+    }
+
+    button.classList.add('is-loading');
+    window.setTimeout(() => {
+      button.classList.remove('is-loading');
+      work.apply(this, args);
+    }, delay);
+  };
+}
+
+function spawnRipple(button, event) {
+  const rect = button.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 1.2;
+  const ripple = document.createElement('span');
+  ripple.className = 'btn-ripple';
+  const x = (event.clientX ?? rect.left + rect.width / 2) - rect.left - size / 2;
+  const y = (event.clientY ?? rect.top + rect.height / 2) - rect.top - size / 2;
+  ripple.style.width = `${size}px`;
+  ripple.style.height = `${size}px`;
+  ripple.style.left = `${x}px`;
+  ripple.style.top = `${y}px`;
+  button.appendChild(ripple);
+  ripple.addEventListener('animationend', () => ripple.remove());
+}
+
+// Animate a numeric counter from its current text to a target value
+function animateCounter(el, target, duration = 500) {
+  if (!el) return;
+  const start = parseFloat(el.innerText) || 0;
+  const end = Number(target);
+  if (REDUCE_MOTION || start === end) {
+    el.innerText = end;
+    pulseValue(el);
+    return;
+  }
+  const startTime = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
+    const current = Math.round(start + (end - start) * eased);
+    el.innerText = current;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      el.innerText = end;
+      pulseValue(el);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function pulseValue(el) {
+  el.classList.remove('just-updated');
+  // Force reflow so the animation can retrigger on repeated updates
+  void el.offsetWidth;
+  el.classList.add('just-updated');
+}
+
 // === Background Canvas Particles ===
 function initBgCanvas() {
   const canvas = document.getElementById('bg-canvas');
@@ -114,6 +196,29 @@ function initBgCanvas() {
 function initNavigation() {
   const tabs = document.querySelectorAll('.nav-btn');
   const panels = document.querySelectorAll('.tab-panel');
+  const navTabs = document.querySelector('.nav-tabs');
+
+  // Inject a sliding pill indicator behind the active tab (runtime-only
+  // DOM node — the HTML file itself is never touched).
+  const indicator = document.createElement('div');
+  indicator.className = 'nav-indicator';
+  navTabs.insertBefore(indicator, navTabs.firstChild);
+
+  function moveIndicatorTo(tab) {
+    const navRect = navTabs.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    indicator.style.width = `${tabRect.width}px`;
+    indicator.style.transform = `translateX(${tabRect.left - navRect.left - 5}px)`;
+    navTabs.classList.add('has-indicator');
+  }
+
+  const activeTab = document.querySelector('.nav-btn.active') || tabs[0];
+  // Position without animating on first paint
+  requestAnimationFrame(() => moveIndicatorTo(activeTab));
+  window.addEventListener('resize', () => {
+    const current = document.querySelector('.nav-btn.active');
+    if (current) moveIndicatorTo(current);
+  });
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -121,6 +226,7 @@ function initNavigation() {
       panels.forEach((p) => p.classList.remove('active'));
 
       tab.classList.add('active');
+      moveIndicatorTo(tab);
       const targetTab = tab.getAttribute('data-tab');
       document.getElementById(`tab-${targetTab}`).classList.add('active');
 
@@ -148,17 +254,17 @@ function initPlayground() {
     resetVerdict();
   });
 
-  btnGenerate.addEventListener('click', () => {
+  btnGenerate.addEventListener('click', withButtonFeedback(btnGenerate, () => {
     generateZKProof();
-  });
+  }));
 
-  btnVerify.addEventListener('click', () => {
+  btnVerify.addEventListener('click', withButtonFeedback(btnVerify, () => {
     verifyZKProof();
-  });
+  }));
 
-  btnTamper.addEventListener('click', () => {
+  btnTamper.addEventListener('click', withButtonFeedback(btnTamper, () => {
     tamperZKProof();
-  });
+  }, 150));
 
   renderParamInputs();
 }
@@ -226,10 +332,12 @@ function resetVerdict() {
   currentProof = null;
 }
 
+// Lines now fade/slide in one after another (staggered via a CSS
+// custom property) instead of all appearing in a single frame.
 function writeToTerminal(lines) {
   const body = document.getElementById('terminal-body');
   body.innerHTML = '';
-  lines.forEach((line) => {
+  lines.forEach((line, idx) => {
     const el = document.createElement('div');
     if (line.startsWith('//')) {
       el.className = 'terminal-line system';
@@ -242,6 +350,7 @@ function writeToTerminal(lines) {
     } else {
       el.className = 'terminal-line';
     }
+    el.style.setProperty('--delay', REDUCE_MOTION ? '0s' : `${Math.min(idx * 0.045, 0.6)}s`);
     el.innerText = line;
     body.appendChild(el);
   });
@@ -476,9 +585,9 @@ function tamperZKProof() {
 // === Circuit Explorer Controller ===
 function initCircuitExplorer() {
   const btnCompile = document.getElementById('btn-compile-dsl');
-  btnCompile.addEventListener('click', () => {
+  btnCompile.addEventListener('click', withButtonFeedback(btnCompile, () => {
     compileDSL();
-  });
+  }, 200));
 }
 
 function renderDefaultCircuit() {
@@ -518,10 +627,10 @@ function compileDSL() {
   const numPrv = lines.filter(l => l.trim().startsWith('private')).length;
   const numInt = variables.length - numPub - numPrv - 1; // subtract 1 for the constant wire
 
-  document.getElementById('stat-constraints').innerText = gates.length;
-  document.getElementById('stat-public').innerText = numPub;
-  document.getElementById('stat-private').innerText = numPrv;
-  document.getElementById('stat-total-vars').innerText = variables.length;
+  animateCounter(document.getElementById('stat-constraints'), gates.length);
+  animateCounter(document.getElementById('stat-public'), numPub);
+  animateCounter(document.getElementById('stat-private'), numPrv);
+  animateCounter(document.getElementById('stat-total-vars'), variables.length);
 
   drawCircuitGraph(variables, gates);
   drawR1CSMatrices(gates, variables);
@@ -593,10 +702,11 @@ function drawCircuitGraph(variables, gates) {
   const node = svg.append('g')
     .selectAll('g')
     .data(nodes)
-    .join('g');
+    .join('g')
+    .style('cursor', 'pointer');
 
   node.append('circle')
-    .attr('r', d => d.type === 'gate' ? 14 : 10)
+    .attr('r', 0)
     .attr('fill', d => {
       if (d.type === 'public') return '#3b82f6';
       if (d.type === 'private') return '#ef4444';
@@ -605,7 +715,17 @@ function drawCircuitGraph(variables, gates) {
       return '#64748b';
     })
     .attr('stroke', '#05070f')
-    .attr('stroke-width', 2);
+    .attr('stroke-width', 2)
+    .transition()
+    .duration(REDUCE_MOTION ? 0 : 400)
+    .ease(d3.easeBackOut)
+    .attr('r', d => d.type === 'gate' ? 14 : 10);
+
+  node.on('mouseenter', function () {
+    d3.select(this).select('circle').transition().duration(150).attr('r', d => (d.type === 'gate' ? 18 : 14));
+  }).on('mouseleave', function () {
+    d3.select(this).select('circle').transition().duration(150).attr('r', d => (d.type === 'gate' ? 14 : 10));
+  });
 
   node.append('text')
     .attr('dy', 4)
@@ -700,8 +820,11 @@ function initSudokuDemo() {
     verifierGrid.appendChild(createSudokuCell(i, 'verifier'));
   }
 
-  document.getElementById('btn-load-preset').addEventListener('click', loadSudokuPreset);
-  document.getElementById('btn-prove-sudoku').addEventListener('click', proveSudoku);
+  const btnLoadPreset = document.getElementById('btn-load-preset');
+  const btnProveSudoku = document.getElementById('btn-prove-sudoku');
+
+  btnLoadPreset.addEventListener('click', withButtonFeedback(btnLoadPreset, loadSudokuPreset, 150));
+  btnProveSudoku.addEventListener('click', withButtonFeedback(btnProveSudoku, proveSudoku, 320));
 
   loadSudokuPreset();
 }
@@ -722,6 +845,8 @@ function createSudokuCell(index, type) {
     if (!/^[1-4]$/.test(val) && val !== '') {
       e.target.value = '';
     }
+    // Clear any stale validity styling as soon as the person edits again
+    e.target.classList.remove('cell-invalid', 'cell-valid');
   });
 
   return input;
@@ -736,6 +861,8 @@ function loadSudokuPreset() {
     puzzleCells[i].value = sudokuPresets.puzzle[i] === 0 ? '' : sudokuPresets.puzzle[i];
     solutionCells[i].value = sudokuPresets.solution[i];
     verifierCells[i].value = sudokuPresets.puzzle[i] === 0 ? '' : sudokuPresets.puzzle[i];
+    puzzleCells[i].classList.remove('cell-invalid', 'cell-valid');
+    solutionCells[i].classList.remove('cell-invalid', 'cell-valid');
   }
 
   // Reset verification indicator
@@ -749,7 +876,7 @@ function loadSudokuPreset() {
 function writeToSudokuTerminal(lines) {
   const body = document.getElementById('sudoku-terminal-body');
   body.innerHTML = '';
-  lines.forEach((line) => {
+  lines.forEach((line, idx) => {
     const el = document.createElement('div');
     if (line.startsWith('//')) {
       el.className = 'terminal-line system';
@@ -762,6 +889,7 @@ function writeToSudokuTerminal(lines) {
     } else {
       el.className = 'terminal-line';
     }
+    el.style.setProperty('--delay', REDUCE_MOTION ? '0s' : `${Math.min(idx * 0.045, 0.6)}s`);
     el.innerText = line;
     body.appendChild(el);
   });
@@ -775,6 +903,9 @@ function proveSudoku() {
   const puzzle = [];
   const solution = [];
 
+  puzzleCells.forEach(c => c.classList.remove('cell-invalid', 'cell-valid'));
+  solutionCells.forEach(c => c.classList.remove('cell-invalid', 'cell-valid'));
+
   for (let i = 0; i < 16; i++) {
     puzzle.push(puzzleCells[i].value === '' ? 0 : parseInt(puzzleCells[i].value));
     solution.push(solutionCells[i].value === '' ? 0 : parseInt(solutionCells[i].value));
@@ -782,11 +913,13 @@ function proveSudoku() {
 
   const logs = ['> Validating solution against Sudoku constraints...'];
   let isValid = true;
+  const invalidCellIndices = new Set();
 
   // 1. Clue match checks
   for (let i = 0; i < 16; i++) {
     if (puzzle[i] !== 0 && puzzle[i] !== solution[i]) {
       isValid = false;
+      invalidCellIndices.add(i);
       logs.push(`✗ Constraint violation at cell ${i}: Puzzle clue ${puzzle[i]} does not match solution ${solution[i]}`);
     }
   }
@@ -800,6 +933,7 @@ function proveSudoku() {
     const unique = new Set(vals);
     if (unique.size !== 4 || vals.some(v => v < 1 || v > 4)) {
       isValid = false;
+      row.forEach(i => invalidCellIndices.add(i));
       logs.push(`✗ Row ${idx} constraint violation: values are not unique/out of bounds.`);
     }
   });
@@ -813,12 +947,14 @@ function proveSudoku() {
     const unique = new Set(vals);
     if (unique.size !== 4) {
       isValid = false;
+      col.forEach(i => invalidCellIndices.add(i));
       logs.push(`✗ Column ${idx} constraint violation.`);
     }
   });
 
   if (!isValid) {
     writeToSudokuTerminal(logs);
+    invalidCellIndices.forEach(i => solutionCells[i].classList.add('cell-invalid'));
     const indicator = document.getElementById('sudoku-verdict-indicator');
     indicator.className = 'status-indicator invalid';
     indicator.querySelector('.indicator-icon').innerText = '✗';
@@ -826,6 +962,8 @@ function proveSudoku() {
     document.getElementById('sudoku-verifier-info').innerText = 'The witness does not satisfy the Sudoku constraint system. Correct the grid and try again.';
     return;
   }
+
+  solutionCells.forEach(c => c.classList.add('cell-valid'));
 
   logs.push('✓ Witness satisfies all 4x4 Sudoku constraints!');
   logs.push('// Compiling constraint matrix:');
@@ -864,12 +1002,15 @@ function initWalkthrough() {
   const btnNext = document.getElementById('btn-walkthrough-next');
   let currentStep = 1;
 
-  function updateSteps() {
+  function updateSteps(direction) {
     steps.forEach((s) => s.classList.remove('active'));
-    panes.forEach((p) => p.classList.remove('active'));
+    panes.forEach((p) => p.classList.remove('active', 'dir-next', 'dir-prev'));
 
     document.querySelector(`.step-nav-btn[data-step="${currentStep}"]`).classList.add('active');
-    document.getElementById(`step-pane-${currentStep}`).classList.add('active');
+    const activePane = document.getElementById(`step-pane-${currentStep}`);
+    activePane.classList.add('active');
+    if (direction === 'next') activePane.classList.add('dir-next');
+    if (direction === 'prev') activePane.classList.add('dir-prev');
 
     btnPrev.disabled = currentStep === 1;
     btnNext.disabled = currentStep === 5;
@@ -882,22 +1023,24 @@ function initWalkthrough() {
 
   steps.forEach((s) => {
     s.addEventListener('click', () => {
-      currentStep = parseInt(s.getAttribute('data-step'));
-      updateSteps();
+      const target = parseInt(s.getAttribute('data-step'));
+      const direction = target > currentStep ? 'next' : 'prev';
+      currentStep = target;
+      updateSteps(direction);
     });
   });
 
   btnPrev.addEventListener('click', () => {
     if (currentStep > 1) {
       currentStep--;
-      updateSteps();
+      updateSteps('prev');
     }
   });
 
   btnNext.addEventListener('click', () => {
     if (currentStep < 5) {
       currentStep++;
-      updateSteps();
+      updateSteps('next');
     }
   });
 }
@@ -905,7 +1048,7 @@ function initWalkthrough() {
 // === Benchmarks Controller ===
 function initBenchmarks() {
   const btnRun = document.getElementById('btn-run-bench');
-  btnRun.addEventListener('click', runBenchmarks);
+  btnRun.addEventListener('click', withButtonFeedback(btnRun, runBenchmarks, 350));
 }
 
 function runBenchmarks() {
@@ -927,7 +1070,7 @@ function renderChart(containerId, data, key, unit) {
 
   const maxVal = Math.max(...data.map(d => d[key]));
 
-  data.forEach((d) => {
+  data.forEach((d, idx) => {
     const pct = (d[key] / maxVal) * 85; // cap at 85% height
     const barGroup = document.createElement('div');
     barGroup.className = 'chart-bar-group';
@@ -939,6 +1082,8 @@ function renderChart(containerId, data, key, unit) {
     const valLabel = document.createElement('span');
     valLabel.className = 'chart-label';
     valLabel.style.marginBottom = '2px';
+    valLabel.style.opacity = '0';
+    valLabel.style.transition = 'opacity 0.4s ease';
     valLabel.innerText = `${d[key]} ${unit}`;
 
     const lbl = document.createElement('span');
@@ -950,10 +1095,13 @@ function renderChart(containerId, data, key, unit) {
     barGroup.appendChild(lbl);
     container.appendChild(barGroup);
 
-    // Animate height
-    setTimeout(() => {
+    // Animate height, staggered left-to-right so the whole chart reads
+    // as one sweeping motion rather than every bar snapping at once
+    const stagger = REDUCE_MOTION ? 0 : idx * 70;
+    window.setTimeout(() => {
       bar.style.height = `${pct}%`;
-    }, 50);
+      valLabel.style.opacity = '1';
+    }, 50 + stagger);
   });
 }
 

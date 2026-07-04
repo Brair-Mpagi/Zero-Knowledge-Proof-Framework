@@ -1,6 +1,7 @@
 /* ==========================================
    Zero-Knowledge Proof Framework Design System
    Theme: Galactic Cyberpunk (Deep Space & Neon)
+   v2 — smoother motion, micro-interactions, polish
    ========================================== */
 
 :root {
@@ -11,28 +12,48 @@
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  
+
   /* Primary Cyberpunk Colors */
   --accent: #00e5ff;
   --accent-rgb: 0, 229, 255;
   --accent-glow: rgba(0, 229, 255, 0.25);
-  
+
   --success: #00ffaa;
   --success-glow: rgba(0, 255, 170, 0.25);
-  
+
   --warning: #ffb700;
   --warning-glow: rgba(255, 183, 0, 0.2);
-  
+
   --error: #ff2a5f;
   --error-glow: rgba(255, 42, 95, 0.25);
-  
+
   --purple-glow: rgba(139, 92, 246, 0.2);
-  
+
   /* Fonts & Shadows */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --panel-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7), 0 0 20px 0 rgba(0, 229, 255, 0.03);
-  --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+  /* Motion tokens — layered easing instead of one blunt transition */
+  --ease-standard: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphatic: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.3s;
+  --dur-slow: 0.55s;
+
+  --transition-smooth: all var(--dur-base) var(--ease-standard);
+  --transition-fast: all var(--dur-fast) var(--ease-standard);
+}
+
+/* Respect people who've asked their OS to cut down on motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Base Setup with 80% Zoom */
@@ -40,6 +61,10 @@ html {
   zoom: 0.80; /* Set global zoom to 80% */
   background-color: var(--bg-color);
   scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 body {
@@ -51,6 +76,41 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  animation: appFadeIn 0.6s var(--ease-emphatic);
+}
+
+@keyframes appFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Visible, tasteful focus states everywhere — accessibility + polish */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom scrollbars, everywhere something can scroll */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 255, 0.25) rgba(0, 0, 0, 0.2);
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.25);
+  border-radius: 8px;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.45);
 }
 
 /* Background Animation Canvas */
@@ -83,6 +143,12 @@ body {
   border-bottom: 1px solid var(--panel-border);
   z-index: 10;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  animation: headerDropIn 0.55s var(--ease-emphatic);
+}
+
+@keyframes headerDropIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .logo {
@@ -97,6 +163,11 @@ body {
   text-shadow: 0 0 15px var(--accent);
   animation: rotateLogo 12s linear infinite;
   display: inline-block;
+  transition: text-shadow var(--dur-base) var(--ease-standard);
+}
+
+.logo:hover .logo-icon {
+  text-shadow: 0 0 24px var(--accent), 0 0 8px #fff;
 }
 
 @keyframes rotateLogo {
@@ -121,6 +192,23 @@ body {
   padding: 5px;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
+  position: relative; /* anchors the JS-injected sliding indicator */
+}
+
+/* Sliding active-tab indicator, inserted at runtime by main.js.
+   Purely additive — falls back gracefully if JS never adds it. */
+.nav-indicator {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  height: calc(100% - 10px);
+  width: 0;
+  background: var(--accent);
+  border-radius: 9px;
+  box-shadow: 0 0 20px var(--accent-glow);
+  transition: transform var(--dur-base) var(--ease-emphatic), width var(--dur-base) var(--ease-emphatic);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .nav-btn {
@@ -135,6 +223,7 @@ body {
   transition: var(--transition-smooth);
   position: relative;
   overflow: hidden;
+  z-index: 1;
 }
 
 .nav-btn::before {
@@ -157,8 +246,18 @@ body {
 
 .nav-btn.active {
   color: #020617;
+  /* background now handled by .nav-indicator sliding beneath; this is the fallback
+     for the moment before JS positions the indicator, or if JS is unavailable */
   background: var(--accent);
   box-shadow: 0 0 20px var(--accent-glow);
+  transition: color var(--dur-base) var(--ease-standard);
+}
+
+/* Once the indicator exists, let the buttons themselves stay transparent
+   so the indicator sliding underneath reads as one continuous motion */
+.nav-tabs.has-indicator .nav-btn.active {
+  background: transparent;
+  box-shadow: none;
 }
 
 .nav-btn.active::before {
@@ -175,6 +274,12 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.15);
   padding: 0.5rem 1rem;
   border-radius: 30px;
+  transition: var(--transition-smooth);
+}
+
+.header-status:hover {
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.08);
 }
 
 .status-dot {
@@ -210,12 +315,12 @@ body {
 
 .tab-panel.active {
   display: flex;
-  animation: slideFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideFadeIn var(--dur-slow) var(--ease-emphatic);
 }
 
 @keyframes slideFadeIn {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(15px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .split-layout {
@@ -236,6 +341,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.8rem;
+}
+
+/* Stagger the cards inside whichever panel just became active, so content
+   arrives in a deliberate sequence instead of popping in all at once. */
+.tab-panel.active .card,
+.tab-panel.active .terminal-container {
+  animation: cardRiseIn var(--dur-slow) var(--ease-emphatic) both;
+}
+.tab-panel.active .panel-left > *:nth-child(1) { animation-delay: 0.02s; }
+.tab-panel.active .panel-left > *:nth-child(2) { animation-delay: 0.08s; }
+.tab-panel.active .panel-left > *:nth-child(3) { animation-delay: 0.14s; }
+.tab-panel.active .panel-left > *:nth-child(4) { animation-delay: 0.2s; }
+.tab-panel.active .panel-right > *:nth-child(1) { animation-delay: 0.1s; }
+.tab-panel.active .panel-right > *:nth-child(2) { animation-delay: 0.18s; }
+
+@keyframes cardRiseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Typography */
@@ -287,6 +410,11 @@ body {
   color: var(--accent);
   font-size: 0.8rem;
   text-shadow: 0 0 8px var(--accent);
+  transition: transform var(--dur-base) var(--ease-standard);
+}
+
+.card:hover .card-title::before {
+  transform: rotate(90deg);
 }
 
 /* Form Controls */
@@ -296,6 +424,7 @@ body {
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 0.6rem;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 
 .select-input, .text-input {
@@ -311,10 +440,20 @@ body {
   transition: var(--transition-smooth);
 }
 
+.select-input:hover, .text-input:hover {
+  border-color: rgba(0, 229, 255, 0.25);
+}
+
 .select-input:focus, .text-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 15px var(--accent-glow);
   background: rgba(0, 0, 0, 0.85);
+  transform: translateY(-1px);
+}
+
+.select-input:focus + .field-label,
+.text-input:focus + .field-label {
+  color: var(--accent);
 }
 
 .param-grid {
@@ -322,6 +461,7 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 1.2rem;
   margin-bottom: 1.5rem;
+  animation: cardRiseIn var(--dur-base) var(--ease-emphatic);
 }
 
 /* Premium Interactive Buttons */
@@ -337,6 +477,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.6rem;
+  position: relative;
+  overflow: hidden; /* contains the JS-driven ripple */
+  isolation: isolate;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -344,6 +492,49 @@ body {
   cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
+}
+
+/* Ripple element, appended by main.js on pointerdown — additive only */
+.btn .btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  transform: scale(0);
+  opacity: 0.6;
+  pointer-events: none;
+  animation: rippleOut 0.6s var(--ease-standard) forwards;
+}
+
+@keyframes rippleOut {
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+/* Loading state, toggled briefly by main.js before an action resolves,
+   so results feel computed rather than instant */
+.btn.is-loading {
+  cursor: progress;
+  pointer-events: none;
+  color: transparent !important;
+}
+
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(2, 6, 23, 0.35);
+  border-top-color: #020617;
+  animation: btnSpin 0.7s linear infinite;
+}
+
+.btn-secondary.is-loading::after {
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--text-primary);
+}
+
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
 }
 
 .btn-primary {
@@ -400,6 +591,7 @@ body {
   padding: 1.2rem;
   border: 1px solid var(--panel-border);
   margin-bottom: 1.5rem;
+  transition: var(--transition-smooth);
 }
 
 .verdict-icon {
@@ -412,6 +604,7 @@ body {
   font-size: 1.8rem;
   font-weight: 800;
   transition: var(--transition-smooth);
+  flex-shrink: 0;
 }
 
 .verdict-icon.idle {
@@ -425,6 +618,7 @@ body {
   color: var(--success);
   border: 1px solid var(--success);
   box-shadow: 0 0 20px var(--success-glow);
+  animation: verdictPop var(--dur-base) var(--ease-out-back);
 }
 
 .verdict-icon.invalid {
@@ -432,12 +626,28 @@ body {
   color: var(--error);
   border: 1px solid var(--error);
   box-shadow: 0 0 20px var(--error-glow);
+  animation: verdictShake 0.5s var(--ease-standard);
+}
+
+@keyframes verdictPop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes verdictShake {
+  0%, 100% { transform: translateX(0) scale(1); }
+  20% { transform: translateX(-4px) scale(1.05); }
+  40% { transform: translateX(4px) scale(1.05); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
 }
 
 .verdict-status {
   font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: 0.5px;
+  transition: color var(--dur-base) var(--ease-standard);
 }
 
 .verdict-time {
@@ -457,6 +667,7 @@ body {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--panel-shadow);
+  transition: border-color var(--dur-base) var(--ease-standard);
 }
 
 .terminal-header {
@@ -476,6 +687,11 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.terminal-dots:hover .dot {
+  transform: scale(1.15);
 }
 
 .terminal-dots .dot.red { background-color: var(--error); }
@@ -501,10 +717,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  scroll-behavior: smooth;
 }
 
+/* Each terminal line fades/slides in individually — staggered via
+   inline --delay set by main.js — instead of appearing all at once */
 .terminal-line {
   word-break: break-all;
+  opacity: 0;
+  transform: translateX(-6px);
+  animation: lineIn var(--dur-base) var(--ease-standard) forwards;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes lineIn {
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .terminal-line.system {
@@ -542,6 +769,10 @@ body {
   transition: var(--transition-smooth);
 }
 
+.code-editor:hover {
+  border-color: rgba(0, 229, 255, 0.25);
+}
+
 .code-editor:focus {
   border-color: var(--accent);
   box-shadow: 0 0 15px var(--accent-glow);
@@ -566,6 +797,7 @@ body {
 .stat-box:hover {
   border-color: var(--accent);
   background: rgba(0, 229, 255, 0.03);
+  transform: translateY(-2px);
 }
 
 .stat-val {
@@ -574,6 +806,19 @@ body {
   font-weight: 800;
   color: var(--accent);
   text-shadow: 0 0 10px var(--accent-glow);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* Brief pulse whenever main.js updates a stat value, so a changed
+   number reads as an event rather than a silent DOM mutation */
+.stat-val.just-updated {
+  animation: statPulse var(--dur-base) var(--ease-out-back);
+}
+
+@keyframes statPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); color: #fff; }
+  100% { transform: scale(1); }
 }
 
 .stat-lbl {
@@ -597,6 +842,10 @@ body {
   position: relative;
 }
 
+.graph-container svg {
+  animation: cardRiseIn var(--dur-base) var(--ease-standard);
+}
+
 .matrix-visualizer {
   height: 180px;
   background: rgba(2, 4, 10, 0.5);
@@ -607,6 +856,11 @@ body {
   justify-content: center;
   overflow: auto;
   padding: 1rem;
+}
+
+.matrix-visualizer .placeholder-text {
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 /* Sudoku Elements */
@@ -657,10 +911,27 @@ body {
   transition: var(--transition-smooth);
 }
 
+.sudoku-cell:hover:not(:disabled) {
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
 .sudoku-cell:focus {
   background: rgba(0, 229, 255, 0.15);
   border-color: var(--accent);
   box-shadow: 0 0 10px var(--accent-glow);
+  transform: scale(1.05);
+}
+
+/* Feedback states, toggled by main.js after a proof attempt */
+.sudoku-cell.cell-invalid {
+  border-color: var(--error);
+  background: rgba(255, 42, 95, 0.12);
+  animation: verdictShake 0.4s var(--ease-standard);
+}
+
+.sudoku-cell.cell-valid {
+  border-color: var(--success);
+  background: rgba(0, 255, 170, 0.08);
 }
 
 /* Outer Border Lines for 2x2 blocks */
@@ -698,6 +969,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  transition: var(--transition-smooth);
 }
 
 .status-indicator {
@@ -719,11 +991,22 @@ body {
   justify-content: center;
   font-size: 1rem;
   font-weight: 800;
+  transition: var(--transition-smooth);
 }
 
 .status-indicator.idle .indicator-icon { background: rgba(255,255,255,0.05); color: var(--text-muted); }
-.status-indicator.valid .indicator-icon { background: var(--success); color: #020617; box-shadow: 0 0 10px var(--success-glow); }
-.status-indicator.invalid .indicator-icon { background: var(--error); color: #fff; box-shadow: 0 0 10px var(--error-glow); }
+.status-indicator.valid .indicator-icon {
+  background: var(--success);
+  color: #020617;
+  box-shadow: 0 0 10px var(--success-glow);
+  animation: verdictPop var(--dur-base) var(--ease-out-back);
+}
+.status-indicator.invalid .indicator-icon {
+  background: var(--error);
+  color: #fff;
+  box-shadow: 0 0 10px var(--error-glow);
+  animation: verdictShake 0.5s var(--ease-standard);
+}
 
 .verifier-info {
   font-size: 0.9rem;
@@ -759,10 +1042,47 @@ body {
   transition: var(--transition-smooth);
 }
 
+.step-nav-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .step-nav-btn.active {
   color: var(--accent);
   background: rgba(0, 229, 255, 0.08);
   box-shadow: inset 0 0 8px rgba(0,229,255,0.05);
+}
+
+.step-display {
+  overflow: hidden; /* clips the slide transition between panes */
+  position: relative;
+}
+
+.step-pane {
+  display: none;
+}
+
+.step-pane.active {
+  display: block;
+  animation: stepSlideIn var(--dur-base) var(--ease-emphatic);
+}
+
+/* Directional variants — main.js adds these instead of the default
+   so "Next" and "Previous" read as moving in opposite directions */
+.step-pane.active.dir-next { animation-name: stepSlideInFromRight; }
+.step-pane.active.dir-prev { animation-name: stepSlideInFromLeft; }
+
+@keyframes stepSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes stepSlideInFromRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes stepSlideInFromLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .step-pane h2 {
@@ -789,6 +1109,11 @@ body {
   text-align: center;
   font-size: 1.1rem;
   color: var(--accent);
+  transition: border-color var(--dur-base) var(--ease-standard);
+}
+
+.math-block:hover {
+  border-color: var(--panel-border-hover);
 }
 
 /* Benchmarks Dashboard Charts */
@@ -806,6 +1131,11 @@ body {
 .comparison-table th, .comparison-table td {
   padding: 1rem;
   border-bottom: 1px solid var(--panel-border);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+
+.comparison-table tbody tr:hover td {
+  background: rgba(0, 229, 255, 0.03);
 }
 
 .comparison-table th {
@@ -851,7 +1181,11 @@ body {
   border-top-left-radius: 6px;
   border-top-right-radius: 6px;
   box-shadow: 0 0 15px var(--accent-glow);
-  transition: height 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: height 0.8s var(--ease-emphatic), filter var(--dur-fast) var(--ease-standard);
+}
+
+.chart-bar-group:hover .chart-bar {
+  filter: brightness(1.3);
 }
 
 .chart-label {
@@ -859,6 +1193,12 @@ body {
   color: var(--text-secondary);
   margin-top: 6px;
   font-family: var(--font-mono);
+}
+
+.chart-placeholder {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: auto;
 }
 
 /* Footer Styling */
@@ -883,4 +1223,53 @@ body {
 
 .github-link:hover {
   text-shadow: 0 0 8px var(--accent-glow);
+  letter-spacing: 0.3px;
+}
+
+/* Small utility classes referenced above/used by main.js, kept here so
+   nothing needs to live inline in JS or change the HTML */
+.text-accent { color: var(--accent); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-error { color: var(--error); }
+.text-center { text-align: center; }
+.flex-row { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.flex-grow { flex: 1; }
+.flex-center { justify-content: center; }
+.gap-large { gap: 2rem; }
+.border-left { border-left: 1px solid var(--panel-border); }
+.padding-left { padding-left: 2rem; }
+.spacer-top { margin-top: 1.2rem; }
+
+/* Responsive: keep the split layouts usable on narrower screens without
+   touching markup — grid just collapses to a single column. */
+@media (max-width: 1100px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .terminal-container {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 720px) {
+  .main-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  .nav-tabs {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
+  .tab-content {
+    padding: 1.2rem;
+  }
+  .sudoku-panels,
+  .sudoku-verifier-panels {
+    flex-direction: column;
+  }
 }
