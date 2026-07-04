@@ -1,0 +1,43 @@
+[workspace]
+members = [
+    "crates/zkp-core",
+    "crates/zkp-cli",
+    "crates/zkp-wasm",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ZKP Framework Contributors"]
+license = "MIT"
+description = "A from-first-principles Zero-Knowledge Proof framework"
+
+[workspace.dependencies]
+# Arkworks ecosystem — vetted field/curve arithmetic
+ark-ff = "0.5"
+ark-ec = "0.5"
+ark-bn254 = "0.5"
+ark-std = "0.5"
+ark-serialize = "0.5"
+
+# Cryptographic hashing
+sha2 = "0.10"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Random number generation
+rand = "0.8"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }

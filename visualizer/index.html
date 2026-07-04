@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZKP Explorer & Visualizer</title>
+  <!-- Google Fonts: Inter and JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- D3.js for circuit graph -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <!-- KaTeX for math formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Animated Particle Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Header Navigation -->
+    <header class="main-header">
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">ZKP<span class="text-accent">.Framework</span></span>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-tab="playground">Proof Playground</button>
+        <button class="nav-btn" data-tab="circuit">Circuit Explorer</button>
+        <button class="nav-btn" data-tab="sudoku">Sudoku Demo</button>
+        <button class="nav-btn" data-tab="walkthrough">Protocol Walkthrough</button>
+        <button class="nav-btn" data-tab="benchmarks">Benchmarks</button>
+      </nav>
+      <div class="header-status">
+        <span class="status-dot green"></span>
+        <span class="status-text">Core Loaded</span>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="tab-content">
+      <!-- 1. PLAYGROUND TAB -->
+      <section id="tab-playground" class="tab-panel active">
+        <div class="split-layout">
+          <div class="panel-left">
+            <h1 class="section-title">Zero-Knowledge Proof Playground</h1>
+            <p class="section-desc">Prove statement knowledge without revealing secret values. Select a statement to interactively generate and verify proofs.</p>
+
+            <div class="card selector-card">
+              <label for="proof-type-select" class="field-label">Select Statement Type</label>
+              <select id="proof-type-select" class="select-input">
+                <option value="discrete-log">Discrete Log Knowledge: I know x s.t. g^x = Y</option>
+                <option value="wallet">Wallet Key Ownership: I own private key x for PK</option>
+                <option value="password">Password Proof (Pedersen Hash preimage)</option>
+              </select>
+            </div>
+
+            <!-- Parameters Card -->
+            <div class="card param-card">
+              <h2 class="card-title">Statement Parameters</h2>
+              <div id="param-inputs">
+                <!-- Inputs dynamic based on selection -->
+              </div>
+              <div class="btn-group">
+                <button id="btn-generate-proof" class="btn btn-primary">Generate Proof</button>
+                <button id="btn-tamper-proof" class="btn btn-warning" disabled>Tamper Proof</button>
+              </div>
+            </div>
+
+            <!-- Verification Panel -->
+            <div class="card verification-card">
+              <h2 class="card-title">Verifier Verdict</h2>
+              <div class="verdict-display">
+                <div id="verdict-icon" class="verdict-icon idle">?</div>
+                <div class="verdict-details">
+                  <div id="verdict-status" class="verdict-status">Idle</div>
+                  <div id="verdict-time" class="verdict-time">Ready for proof generation</div>
+                </div>
+              </div>
+              <button id="btn-verify-proof" class="btn btn-success" disabled>Verify Proof</button>
+            </div>
+          </div>
+
+          <div class="panel-right">
+            <!-- Transcript / Terminal -->
+            <div class="terminal-container">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                </div>
+                <span class="terminal-title">Proof Transcript Explorer</span>
+              </div>
+              <div id="terminal-body" class="terminal-body">
+                <div class="terminal-line system">// ZKP Framework Proof System ready.</div>
+                <div class="terminal-line system">// Choose parameters and click "Generate Proof" to begin transcript tracking.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. CIRCUIT EXPLORER TAB -->
+      <section id="tab-circuit" class="tab-panel">
+        <div class="split-layout">
+          <div class="panel-left">
+            <h1 class="section-title">Circuit Builder & R1CS Visualizer</h1>
+            <p class="section-desc">Compile declarative ZK circuits into Rank-1 Constraint System (R1CS) matrices.</p>
+
+            <div class="card dsl-card">
+              <h2 class="card-title">Circuit DSL Editor</h2>
+              <textarea id="dsl-editor" class="code-editor" rows="12" spellcheck="false">
+circuit square_root
+private secret_x
+public public_y
+
+# Constraint: secret_x * secret_x = public_y
+mul secret_x secret_x public_y
+              </textarea>
+              <button id="btn-compile-dsl" class="btn btn-primary">Compile & Generate R1CS</button>
+            </div>
+
+            <div class="card stats-card">
+              <h2 class="card-title">Constraint System Info</h2>
+              <div class="stats-grid" id="circuit-stats-display">
+                <div class="stat-box">
+                  <span class="stat-val" id="stat-constraints">-</span>
+                  <span class="stat-lbl">Constraints</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-val" id="stat-public">-</span>
+                  <span class="stat-lbl">Pub Inputs</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-val" id="stat-private">-</span>
+                  <span class="stat-lbl">Prv Inputs</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-val" id="stat-total-vars">-</span>
+                  <span class="stat-lbl">Total Wires</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-right flex-col">
+            <div class="card graph-card flex-grow">
+              <h2 class="card-title">Circuit DAG Graph</h2>
+              <div id="circuit-graph-container" class="graph-container">
+                <!-- SVG injected here -->
+              </div>
+            </div>
+            <div class="card r1cs-matrix-card">
+              <h2 class="card-title">R1CS Matrices (A, B, C)</h2>
+              <div id="r1cs-matrix-visual" class="matrix-visualizer">
+                <p class="placeholder-text">Compile a circuit to visualize R1CS matrices.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. SUDOKU DEMO TAB -->
+      <section id="tab-sudoku" class="tab-panel">
+        <div class="split-layout">
+          <div class="panel-left">
+            <h1 class="section-title">Sudoku Proof Demo (4×4 Grid)</h1>
+            <p class="section-desc">Prove you know a valid solution to a 4×4 Sudoku without revealing the solution digits. Fill in a puzzle and a solution, then run the prover.</p>
+
+            <div class="card sudoku-setup-card">
+              <h2 class="card-title">Sudoku Grid Setup</h2>
+              <div class="sudoku-panels">
+                <div class="sudoku-grid-container">
+                  <h3>Puzzle (Clues)</h3>
+                  <div class="sudoku-grid" id="sudoku-puzzle-grid">
+                    <!-- 16 inputs -->
+                  </div>
+                </div>
+                <div class="sudoku-grid-container">
+                  <h3>Solution (Witness)</h3>
+                  <div class="sudoku-grid" id="sudoku-solution-grid">
+                    <!-- 16 inputs -->
+                  </div>
+                </div>
+              </div>
+              <div class="btn-group spacer-top">
+                <button id="btn-load-preset" class="btn btn-secondary">Load Preset</button>
+                <button id="btn-prove-sudoku" class="btn btn-primary">Generate Sudoku Proof</button>
+              </div>
+            </div>
+
+            <!-- Sudoku Verifier Card -->
+            <div class="card sudoku-verifier-card">
+              <h2 class="card-title">Verifier View</h2>
+              <div class="sudoku-verifier-panels">
+                <div class="sudoku-grid-container">
+                  <h3>Verifier Puzzle State</h3>
+                  <div class="sudoku-grid disabled" id="sudoku-verifier-grid">
+                    <!-- Disabled 16 inputs -->
+                  </div>
+                </div>
+                <div class="verifier-result-box">
+                  <div class="status-indicator" id="sudoku-verdict-indicator">
+                    <span class="indicator-icon">?</span>
+                    <span class="indicator-text">Awaiting Proof</span>
+                  </div>
+                  <div class="verifier-info" id="sudoku-verifier-info">
+                    Select a preset or enter digits and click "Generate Sudoku Proof".
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-right">
+            <!-- Terminal for Sudoku proof verification logs -->
+            <div class="terminal-container">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                </div>
+                <span class="terminal-title">Sudoku Proof Logs & R1CS Verification</span>
+              </div>
+              <div id="sudoku-terminal-body" class="terminal-body">
+                <div class="terminal-line system">// Sudoku proving system initialized.</div>
+                <div class="terminal-line system">// 4x4 Sudoku uses range checks + row/column/box uniqueness constraints.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. PROTOCOL WALKTHROUGH TAB -->
+      <section id="tab-walkthrough" class="tab-panel">
+        <div class="single-layout">
+          <h1 class="section-title text-center">Interactive Protocol Walkthrough</h1>
+          <p class="section-desc text-center">Step-by-step mathematical walkthrough of interactive vs. non-interactive (Fiat-Shamir) Schnorr proof protocols.</p>
+
+          <div class="walkthrough-stepper">
+            <div class="step-nav">
+              <button class="step-nav-btn active" data-step="1">1. Setup</button>
+              <button class="step-nav-btn" data-step="2">2. Commitment</button>
+              <button class="step-nav-btn" data-step="3">3. Challenge</button>
+              <button class="step-nav-btn" data-step="4">4. Response</button>
+              <button class="step-nav-btn" data-step="5">5. Verification</button>
+            </div>
+
+            <div class="step-display card">
+              <div class="step-pane active" id="step-pane-1">
+                <h2>Phase 1: Setup & Parameters</h2>
+                <p>We work in a prime-order finite field $\mathbb{F}_p$ and an elliptic curve group $\mathbb{G}$ with generator point $g$.</p>
+                <div class="math-block">
+                  $$\mathbb{F}_p = \{0, 1, 2, ..., p-1\}$$
+                  $$g \in \mathbb{G}$$
+                </div>
+                <p>The Prover possesses a secret value $x$ (the witness) and publishes a public key $Y$:</p>
+                <div class="math-block">
+                  $$Y = g^x$$
+                </div>
+                <p>The goal is to prove knowledge of $x$ without revealing it.</p>
+              </div>
+
+              <div class="step-pane" id="step-pane-2">
+                <h2>Phase 2: Prover Commitment</h2>
+                <p>The Prover picks a cryptographically secure random value $k \in \mathbb{F}_p$ (called the <em>nonce</em> or <em>blinding factor</em>).</p>
+                <p>Then, the Prover computes a commitment point $R$ and sends it to the Verifier:</p>
+                <div class="math-block">
+                  $$k \leftarrow_R \mathbb{F}_p$$
+                  $$R = g^k$$
+                </div>
+                <p>This hides the secret value but binds the Prover to a random selection for the duration of the proof run.</p>
+              </div>
+
+              <div class="step-pane" id="step-pane-3">
+                <h2>Phase 3: Challenge Generation</h2>
+                <div class="flex-row gap-large">
+                  <div class="flex-grow">
+                    <h3>Interactive Protocol</h3>
+                    <p>In an interactive setting, the Verifier sends a randomly selected challenge scalar $c \in \mathbb{F}_p$ back to the Prover.</p>
+                    <div class="math-block">
+                      $$c \leftarrow_R \mathbb{F}_p$$
+                    </div>
+                  </div>
+                  <div class="flex-grow border-left padding-left">
+                    <h3>Non-Interactive (Fiat-Shamir)</h3>
+                    <p>In a non-interactive setting, the Prover computes the challenge locally by hashing the public parameters and the commitment:</p>
+                    <div class="math-block">
+                      $$c = H(\text{domain} \parallel g \parallel Y \parallel R)$$
+                    </div>
+                    <p>This makes the challenge unpredictable but deterministically verifiable.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="step-pane" id="step-pane-4">
+                <h2>Phase 4: Prover Response</h2>
+                <p>The Prover computes the response value $s$ using their secret key $x$, the nonce $k$, and the challenge $c$:</p>
+                <div class="math-block">
+                  $$s = k + c \cdot x \pmod p$$
+                </div>
+                <p>The Prover sends the response $s$ along with the commitment $R$ as the proof object $\pi = (R, s)$.</p>
+              </div>
+
+              <div class="step-pane" id="step-pane-5">
+                <h2>Phase 5: Verification Equation</h2>
+                <p>The Verifier recomputes the challenge $c$ (using the hash function or the challenge they sent) and checks if:</p>
+                <div class="math-block">
+                  $$g^s \stackrel{?}{=} R \cdot Y^c$$
+                </div>
+                <h3>Why does this hold?</h3>
+                <p>By substituting the definition of $s$ and $Y$:</p>
+                <div class="math-block">
+                  $$g^s = g^{k + c \cdot x} = g^k \cdot (g^x)^c = R \cdot Y^c$$
+                </div>
+                <p>If the equation holds, the Verifier accepts the proof. Zero knowledge is preserved because $s$ is randomized by $k$, making it mathematically impossible to recover $x$.</p>
+              </div>
+            </div>
+            <div class="btn-group flex-center spacer-top">
+              <button id="btn-walkthrough-prev" class="btn btn-secondary" disabled>Previous Step</button>
+              <button id="btn-walkthrough-next" class="btn btn-primary">Next Step</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. BENCHMARKS TAB -->
+      <section id="tab-benchmarks" class="tab-panel">
+        <div class="split-layout">
+          <div class="panel-left">
+            <h1 class="section-title">Performance & Size Benchmarks</h1>
+            <p class="section-desc">Analyze proving time, verification time, and proof size scaling vs. constraint count.</p>
+
+            <div class="card bench-control-card">
+              <h2 class="card-title">Run Benchmark Suite</h2>
+              <p>Simulate proof generation and verification across varying constraint counts (from simple multiplication gates to complex circuits).</p>
+              <button id="btn-run-bench" class="btn btn-primary">Run Simulation Benchmarks</button>
+            </div>
+
+            <div class="card comparison-card">
+              <h2 class="card-title">Simplifications vs. Production SNARKs</h2>
+              <p>Our educational framework uses per-constraint Sigma proofs. Here is how it compares to Groth16 zk-SNARKs:</p>
+              <div class="comparison-table-wrapper">
+                <table class="comparison-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>This Framework</th>
+                      <th>Groth16 (Production)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Proof Size</td>
+                      <td class="text-warning">O(N) - Linear</td>
+                      <td class="text-success">O(1) - Constant (~128 bytes)</td>
+                    </tr>
+                    <tr>
+                      <td>Verify Time</td>
+                      <td class="text-warning">O(N) - Linear</td>
+                      <td class="text-success">O(1) - Constant (~2ms)</td>
+                    </tr>
+                    <tr>
+                      <td>Setup</td>
+                      <td class="text-success">No Trusted Setup</td>
+                      <td class="text-warning">Requires Ceremony</td>
+                    </tr>
+                    <tr>
+                      <td>Curve</td>
+                      <td>BN254 (alt_bn128)</td>
+                      <td>BN254 or BLS12-381</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-right flex-col">
+            <div class="card chart-card flex-grow">
+              <h2 class="card-title">Proving Time vs. Constraints (ms)</h2>
+              <div class="chart-container" id="prove-chart-container">
+                <!-- SVG chart -->
+                <div class="chart-y-axis"></div>
+                <div class="chart-plot" id="prove-chart-plot">
+                  <div class="chart-placeholder">Click "Run Simulation Benchmarks" to render charts.</div>
+                </div>
+              </div>
+            </div>
+            <div class="card chart-card flex-grow">
+              <h2 class="card-title">Proof Size vs. Constraints (KB)</h2>
+              <div class="chart-container" id="size-chart-container">
+                <!-- SVG chart -->
+                <div class="chart-y-axis"></div>
+                <div class="chart-plot" id="size-chart-plot">
+                  <div class="chart-placeholder">Click "Run Simulation Benchmarks" to render charts.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <span>Zero-Knowledge Proof Framework Explorer • Hand-rolled Core & Math</span>
+      <a href="https://github.com" target="_blank" class="github-link">View Documentation</a>
+    </footer>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+[package]
+name = "zkp-wasm"
+version.workspace = true
+edition.workspace = true
+description = "WASM bindings for the ZKP framework"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zkp-core = { path = "../zkp-core" }
+wasm-bindgen = "0.2"
+serde_json.workspace = true
+serde.workspace = true
+rand.workspace = true
+getrandom = { version = "0.2", features = ["js"] }

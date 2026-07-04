@@ -1,0 +1,30 @@
+# Rust Build Artifacts
+target/
+**/*.rs.bk
+
+# Node / JS Dependencies & Builds
+node_modules/
+visualizer/node_modules/
+visualizer/dist/
+visualizer/.vite/
+dist/
+
+# WebAssembly compilation artifacts
+crates/zkp-wasm/pkg/
+crates/zkp-wasm/target/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
