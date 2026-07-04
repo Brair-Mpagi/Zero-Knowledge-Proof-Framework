@@ -244,7 +244,7 @@ body {
 }
 
 .nav-btn.active {
-  color: #020617;
+  color: #ffffff;
   /* background now handled by .nav-indicator sliding beneath; this is the fallback
      for the moment before JS positions the indicator, or if JS is unavailable */
   background: var(--accent);
